@@ -66,7 +66,13 @@ function initializePresentation(prefix) {
 
 	//copy into presentation area
 	$("#preso").empty()
+	$("#preso_next").empty()
+  var clonedSlides = $("#slides > .slide").clone();
 	$('#slides > .slide').appendTo($("#preso"))
+	$(clonedSlides).appendTo($("#preso_next"))
+
+  // append empty slide
+  $('<div class="slide" style="background-color:black;"></div>').appendTo($('#preso_next'));
 
 	//populate vars
 	slides = $('#preso > .slide')
@@ -74,6 +80,9 @@ function initializePresentation(prefix) {
 
 	//setup manual jquery cycle
 	$('#preso').cycle({
+		timeout: 0
+	})
+	$('#preso_next').cycle({
 		timeout: 0
 	})
 
@@ -213,7 +222,35 @@ function showSlide(back_step) {
 
 	$(currentSlide).find(".content").trigger("showoff:show");
 
+  showSubSlide(back_step);
 	return getCurrentNotes()
+}
+
+function showSubSlide(back_step) {
+  var _slidenum = slidenum;
+	if(_slidenum < 0) {
+		_slidenum = 0
+		return
+	}
+  _slidenum++;
+
+	if(_slidenum > (slideTotal - 1)) {
+    $("#preso_next").cycle(_slidenum, 'none');
+		return
+	}
+
+	currentSlide = slides.eq(_slidenum)
+
+	var fullPage = currentSlide.find(".content").is('.full-page');
+
+	$('#preso_next').cycle(_slidenum, 'none')
+
+	if (fullPage) {
+		$('#preso_next').css({'width' : '100%', 'overflow' : 'visible'});
+		currentSlide.css({'width' : '100%', 'text-align' : 'center', 'overflow' : 'visible'});
+	}
+
+	return;
 }
 
 function getSlideProgress()
@@ -225,6 +262,7 @@ function getCurrentNotes()
 {
   var notes = currentSlide.find("p.notes").text()
   $('#notesInfo').text(notes)
+  $('#preso_notes').text(notes)
 	return notes
 }
 
@@ -259,7 +297,8 @@ function prevStep()
 			return;
 	}
 
-	slidenum--
+	slidenum--;
+  sendSocketMsg({advance: slidenum, backstep: true});
 	return showSlide(true) // We show the slide fully loaded
 }
 
@@ -272,9 +311,11 @@ function nextStep()
 	}
 
 	if (incrCurr >= incrSteps) {
-		slidenum++
+		slidenum++;
+    sendSocketMsg({advance: slidenum});
 		return showSlide()
 	} else {
+    sendSocketMsg({nextBullet: true});
 		elem = incrElem.eq(incrCurr)
 		if (incrCode && elem.hasClass('command')) {
 			incrElem.eq(incrCurr).show().jTypeWriter({duration:1.0})
@@ -334,6 +375,7 @@ function keyDown(event)
 			slidenum = gotoSlidenum - 1;
 			showSlide(true);
 			gotoSlidenum = 0;
+      sendSocketMsg({advance: slidenum, backstep: true});
 		} else {
 			debug('executeCode');
             var $jsCode = $('.execute .sh_javascript code:visible')
@@ -633,6 +675,13 @@ function nextPreShowImage() {
  ********************/
 
 var presenterSocket;
+function sendSocketMsg(msg) {
+  if (presenterSocket) {
+    msg = JSON.stringify(msg);
+    console.log("Sent:", msg);
+    presenterSocket.send(msg);
+  }
+}
 
 function connectSocket()
 {
@@ -641,31 +690,21 @@ function connectSocket()
   presenterSocket.connect();
   presenterSocket.on('connect', function(){
     console.log("Connected!");
-    presenterSocket.send(JSON.stringify({'type': 'client'}));
+    presenterSocket.send(JSON.stringify({'type': 'presenter'}));
   });
 
-  var serverConnected = false;
+  var clientConnected = false;
 
   presenterSocket.on('message', function(data){
     console.log("Got message", data);
     data = JSON.parse(data);
 
     if (data.connected == "both") {
-      console.log("Both sides are connected, let's go");
+      alert("Both sides are connected, let's go");
     }
 
-    if (data.serverConnected) {
-      serverConnected = true;
-    }
-
-    if (typeof data.advance !== 'undefined') {
-      debug('go to ' + data.advance);
-      slidenum = data.advance;
-      showSlide(data.backstep);
-    }
-
-    if (data.nextBullet) {
-      nextStep();
+    if (data.clientConnected) {
+      clientConnected = true;
     }
   });
 }
