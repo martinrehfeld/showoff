@@ -260,7 +260,7 @@ function getSlideProgress()
 
 function getCurrentNotes()
 {
-  var notes = currentSlide.find("p.notes").text()
+  var notes = currentSlide.prev(".slide").find("p.notes").text() // currentSlide is actually already the next slide!?
   $('#notesInfo').text(notes)
   $('#preso_notes').text(notes)
 	return notes
